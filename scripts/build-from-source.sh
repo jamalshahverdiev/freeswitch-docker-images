@@ -36,6 +36,14 @@ export CXXFLAGS="${CXXFLAGS:-} -Wno-error -Wno-deprecated-declarations"
 
 ./bootstrap.sh -j
 ./configure --disable-dependency-tracking
+
+# Disable modules that pull out-of-tree deps not installed here, so the legacy
+# build stays self-contained: scripting languages (lua/perl/python/v8/java),
+# libks-based cloud/webrtc (signalwire/verto/rtc), and video (av/cv/png).
+if [ -f modules.conf ]; then
+  sed -i -E 's@^(languages/|applications/mod_signalwire|endpoints/mod_verto|endpoints/mod_rtc|applications/mod_av|applications/mod_cv|formats/mod_png)@#&@' modules.conf
+fi
+
 make -j"$(nproc)"
 make install
 make sounds-install moh-install || true
