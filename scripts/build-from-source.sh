@@ -28,6 +28,12 @@ git clone https://github.com/signalwire/freeswitch.git /usr/src/freeswitch
 cd /usr/src/freeswitch
 git checkout "$FS_REF"
 
+# Old FreeSWITCH lines were written for older GCC; newer GCC promotes extra
+# warnings to errors (-Werror). CFLAGS is appended last in the automake compile
+# rule, so -Wno-error overrides the in-tree -Werror.
+export CFLAGS="${CFLAGS:-} -Wno-error -Wno-deprecated-declarations"
+export CXXFLAGS="${CXXFLAGS:-} -Wno-error -Wno-deprecated-declarations"
+
 ./bootstrap.sh -j
 ./configure --disable-dependency-tracking
 make -j"$(nproc)"
