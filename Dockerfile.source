@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1.7
+ARG BASE_IMAGE=debian:stretch
+FROM ${BASE_IMAGE}
+
+ARG FS_REF
+ENV FS_REF=${FS_REF}
+
+COPY scripts/build-from-source.sh /tmp/build-from-source.sh
+RUN chmod +x /tmp/build-from-source.sh \
+    && /tmp/build-from-source.sh \
+    && rm -f /tmp/build-from-source.sh
+
+ENV PATH="/usr/local/freeswitch/bin:${PATH}"
+
+EXPOSE 5060/udp 5060/tcp 5080/udp 5080/tcp 8021/tcp 16384-32768/udp
+
+CMD ["freeswitch", "-nf", "-nonat"]

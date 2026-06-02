@@ -7,13 +7,16 @@ builds them on the matching Debian base, and pushes to
 ## How it works
 
 1. A daily cron (`.github/workflows/build-and-push.yml`) runs `scripts/plan-builds.sh`.
-2. For every entry in `matrix.json` the planner spins up the base image, wires up
-   the SignalWire **token** apt repo, and asks `apt-cache madison` which version is
-   available for that Debian codename.
-3. If a version exists **and** the corresponding tag is not yet on Docker Hub, the
-   pair is queued. Anything not found in the repo is logged and skipped — never a
-   silent failure.
-4. The `build` job builds each queued image with `Dockerfile` and pushes it.
+2. For every entry in `matrix.json` the planner discovers the latest version, by one
+   of two methods (per the entry's `method` field):
+   - **`token-apt`** — spins up the base image, wires up the SignalWire token apt
+     repo, and asks `apt-cache madison` what is available for that codename.
+   - **`source`** — picks the latest git tag matching `ref_prefix` (e.g. `v1.6.`)
+     via `git ls-remote`.
+3. If a version exists **and** the tag is not yet on Docker Hub, it is queued.
+   Anything not found is logged and skipped — never a silent failure.
+4. The `build` job builds each queued image with the per-entry Dockerfile
+   (`Dockerfile` for apt, `Dockerfile.source` for source) and pushes it.
 
 The SignalWire Personal Access Token is only ever passed as a BuildKit
 `--mount=type=secret`, so it never lands in an image layer.
@@ -23,17 +26,25 @@ The SignalWire Personal Access Token is only ever passed as a BuildKit
 Old FreeSWITCH lines do not compile on modern Debian (OpenSSL 3.x removed the
 APIs they use), so each line is pinned to its own era:
 
-| FreeSWITCH | Debian base   | apt repo path     | Status today |
-|------------|---------------|-------------------|--------------|
-| 1.6        | `debian:stretch` (9)  | debian-release  | **Skipped** — not in token repo, Debian 9 archive offline |
-| 1.8        | `debian:buster` (10)  | debian-release  | **Skipped** — not in token repo |
-| 1.10       | `debian:bookworm` (12)| debian-release  | **Builds** — current stable, also tagged `latest` |
-| 1.11       | `debian:trixie` (13)  | debian-unstable | Best-effort — Debian 13 token repo currently broken |
+| FreeSWITCH | Debian base   | Method      | Notes |
+|------------|---------------|-------------|-------|
+| 1.6        | `debian:stretch` (9)  | source     | Latest `v1.6.*` tag, compiled on Debian 9 |
+| 1.8        | `debian:buster` (10)  | source     | Latest `v1.8.*` tag, compiled on Debian 10 |
+| 1.10       | `debian:bookworm` (12)| token-apt  | Current stable, also tagged `latest` |
+| 1.11       | `debian:trixie` (13)  | token-apt  | Debian 13; trixie token repo is currently flaky |
 
-The token apt repo realistically serves only the **1.10.x** line. 1.6/1.8 are not
-published there at all; to actually produce those images you would need to switch
-their matrix entries to a source build (`git checkout v1.6.x && ./configure && make`)
-on the era-correct base — left as a follow-up.
+### Source builds (1.6 / 1.8)
+
+`Dockerfile.source` + `scripts/build-from-source.sh` clone the git tag and compile
+on the era-correct base. The script rewrites `sources.list` to
+`archive.debian.org` (those Debian suites are EOL) and disables the stale
+`Valid-Until` check, then installs build deps and runs
+`./bootstrap.sh && ./configure && make && make install` (prefix
+`/usr/local/freeswitch`).
+
+This is **best-effort**: a specific old tag may need a configure flag or a module
+disabled. Tune `build-from-source.sh` (e.g. `cp build/modules.conf.in modules.conf`
+and comment out a failing module) if a build breaks.
 
 ## Tags produced
 

@@ -1,27 +1,79 @@
 #!/usr/bin/env bash
-# Probes each matrix entry against the SignalWire token apt repo, decides which
-# (version, codename) pairs are available but not yet on Docker Hub, and emits a
-# build matrix on GITHUB_OUTPUT (keys: matrix, any).
+# Decides which (version, codename) images are available but not yet on Docker
+# Hub, and emits a build matrix on GITHUB_OUTPUT (keys: matrix, any).
+#
+# Two discovery methods per matrix entry:
+#   token-apt : probe the SignalWire token apt repo via `apt-cache madison`
+#   source    : pick the latest matching git tag via `git ls-remote`
 set -euo pipefail
 
 : "${SIGNALWIRE_TOKEN:?SIGNALWIRE_TOKEN is required}"
 : "${DOCKERHUB_REPO:=jamalshahverdiev/freeswitch}"
 MATRIX_FILE="${MATRIX_FILE:-matrix.json}"
+FS_GIT="https://github.com/signalwire/freeswitch.git"
 
 builds='[]'
 count=$(jq length "$MATRIX_FILE")
 
+# tag_exists <tag> -> 0 if already on Docker Hub
+tag_exists() {
+  [ "${FORCE:-false}" = "true" ] && return 1
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' \
+      "https://hub.docker.com/v2/repositories/${DOCKERHUB_REPO}/tags/$1/")
+  [ "$code" = "200" ]
+}
+
+# queue <base> <dockerfile> <codename> <major> <aliases-json> <tag> \
+#       <repo_path> <package> <version> <ref>
+queue() {
+  local tags="${DOCKERHUB_REPO}:$6,${DOCKERHUB_REPO}:$4"
+  local a
+  while IFS= read -r a; do
+    [ -n "$a" ] && tags="${tags},${DOCKERHUB_REPO}:${a}"
+  done < <(jq -r '.[]' <<<"$5")
+  echo "queued ${1} -> ${tags}"
+  builds=$(jq -c \
+      --arg base "$1" --arg dockerfile "$2" --arg codename "$3" \
+      --arg repo "${7:-}" --arg pkg "${8:-}" --arg ver "${9:-}" --arg ref "${10:-}" \
+      --arg tags "$tags" \
+      '. += [{base_image:$base, dockerfile:$dockerfile, codename:$codename, repo_path:$repo, package:$pkg, version:$ver, ref:$ref, tags:$tags}]' \
+      <<<"$builds")
+}
+
 for i in $(seq 0 $((count - 1))); do
   entry=$(jq -c ".[$i]" "$MATRIX_FILE")
-  major=$(jq -r '.major'        <<<"$entry")
-  base=$(jq -r  '.base_image'   <<<"$entry")
-  codename=$(jq -r '.codename'  <<<"$entry")
-  repo=$(jq -r  '.repo_path'    <<<"$entry")
-  pkg=$(jq -r   '.package'      <<<"$entry")
+  method=$(jq -r '.method // "token-apt"' <<<"$entry")
+  major=$(jq -r   '.major'         <<<"$entry")
+  base=$(jq -r    '.base_image'    <<<"$entry")
+  codename=$(jq -r '.codename'     <<<"$entry")
   aliases=$(jq -c '.aliases // []' <<<"$entry")
 
-  echo "::group::Probe FreeSWITCH ${major} (${codename})"
+  echo "::group::Plan FreeSWITCH ${major} (${codename}, ${method})"
 
+  if [ "$method" = "source" ]; then
+    ref_prefix=$(jq -r '.ref_prefix' <<<"$entry")
+    esc=$(sed 's/\./\\./g' <<<"$ref_prefix")
+    full=$(git ls-remote --tags --refs "$FS_GIT" \
+        | awk -F/ '{print $NF}' \
+        | grep -E "^${esc}[0-9]" \
+        | sort -V | tail -1 || true)
+    if [ -z "$full" ]; then
+      echo "no git tag matching ${ref_prefix}* -> skip"; echo "::endgroup::"; continue
+    fi
+    clean="${full#v}"
+    tag="${clean}-${codename}"
+    echo "latest tag: ${full} -> tag ${tag}"
+    if tag_exists "$tag"; then
+      echo "tag ${tag} already on Docker Hub -> skip"; echo "::endgroup::"; continue
+    fi
+    queue "$base" "Dockerfile.source" "$codename" "$major" "$aliases" "$tag" "" "" "" "$full"
+    echo "::endgroup::"; continue
+  fi
+
+  # token-apt
+  repo=$(jq -r '.repo_path' <<<"$entry")
+  pkg=$(jq -r  '.package'   <<<"$entry")
   full=$(docker run --rm \
       -e TOKEN="$SIGNALWIRE_TOKEN" -e REPO="$repo" -e CODENAME="$codename" -e PKG="$pkg" \
       "$base" bash -c '
@@ -40,36 +92,15 @@ for i in $(seq 0 $((count - 1))); do
       ' 2>/dev/null || true)
 
   if [ -z "$full" ]; then
-    echo "no package available in repo -> skip"
-    echo "::endgroup::"
-    continue
+    echo "no package available in repo -> skip"; echo "::endgroup::"; continue
   fi
-
   clean=$(sed -E 's/[-~].*$//' <<<"$full")
   tag="${clean}-${codename}"
   echo "available: ${full} -> tag ${tag}"
-
-  if [ "${FORCE:-false}" != "true" ]; then
-    http=$(curl -s -o /dev/null -w '%{http_code}' \
-        "https://hub.docker.com/v2/repositories/${DOCKERHUB_REPO}/tags/${tag}/")
-    if [ "$http" = "200" ]; then
-      echo "tag ${tag} already on Docker Hub -> skip"
-      echo "::endgroup::"
-      continue
-    fi
+  if tag_exists "$tag"; then
+    echo "tag ${tag} already on Docker Hub -> skip"; echo "::endgroup::"; continue
   fi
-
-  tags="${DOCKERHUB_REPO}:${tag},${DOCKERHUB_REPO}:${major}"
-  while IFS= read -r a; do
-    [ -n "$a" ] && tags="${tags},${DOCKERHUB_REPO}:${a}"
-  done < <(jq -r '.[]' <<<"$aliases")
-
-  echo "queued for build with tags: ${tags}"
-  builds=$(jq -c \
-      --arg base "$base" --arg repo "$repo" --arg pkg "$pkg" \
-      --arg ver "$full" --arg codename "$codename" --arg tags "$tags" \
-      '. += [{base_image:$base, repo_path:$repo, package:$pkg, version:$ver, codename:$codename, tags:$tags}]' \
-      <<<"$builds")
+  queue "$base" "Dockerfile" "$codename" "$major" "$aliases" "$tag" "$repo" "$pkg" "$full" ""
   echo "::endgroup::"
 done
 
