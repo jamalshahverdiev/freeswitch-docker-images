@@ -6,10 +6,12 @@ set -euo pipefail
 : "${FS_REF:?FS_REF (git tag or branch) is required}"
 export DEBIAN_FRONTEND=noninteractive
 
-# EOL Debian suites are served from archive.debian.org with stale Valid-Until.
+# EOL Debian suites are served from archive.debian.org with stale Valid-Until,
+# and the *-updates suites do not exist there (would 404 and fail apt-get update).
 if grep -qiE 'jessie|stretch|buster' /etc/apt/sources.list 2>/dev/null; then
   sed -i -E 's#https?://[^ ]*debian.org/debian-security#http://archive.debian.org/debian-security#g' /etc/apt/sources.list
   sed -i -E 's#https?://[^ ]*debian.org/debian#http://archive.debian.org/debian#g' /etc/apt/sources.list
+  sed -i -E '/-updates/d' /etc/apt/sources.list
   echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid
 fi
 
