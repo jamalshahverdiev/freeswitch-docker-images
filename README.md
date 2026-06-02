@@ -28,7 +28,7 @@ APIs they use), so each line is pinned to its own era:
 
 | FreeSWITCH | Debian base   | Method      | Notes |
 |------------|---------------|-------------|-------|
-| 1.6        | `debian:stretch` (9)  | source     | Latest `v1.6.*` tag, compiled on Debian 9 |
+| 1.6        | `debian:jessie` (8)   | source     | Latest `v1.6.*` tag; needs OpenSSL 1.0.2 (bundled libsrtp breaks on OpenSSL 1.1) |
 | 1.8        | `debian:buster` (10)  | source     | Latest `v1.8.*` tag, compiled on Debian 10 |
 | 1.10       | `debian:bookworm` (12)| token-apt  | Current stable, also tagged `latest` |
 | 1.11       | `debian:trixie` (13)  | token-apt  | Debian 13; trixie token repo is currently flaky |
