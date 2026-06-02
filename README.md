@@ -42,9 +42,14 @@ on the era-correct base. The script rewrites `sources.list` to
 `./bootstrap.sh && ./configure && make && make install` (prefix
 `/usr/local/freeswitch`).
 
-This is **best-effort**: a specific old tag may need a configure flag or a module
-disabled. Tune `build-from-source.sh` (e.g. `cp build/modules.conf.in modules.conf`
-and comment out a failing module) if a build breaks.
+To keep legacy builds self-contained, `build-from-source.sh` disables modules that
+need out-of-tree dependencies before `make`: scripting languages
+(lua/perl/python/v8/java), libks-based cloud/webrtc (`mod_signalwire`, `mod_verto`,
+`mod_rtc`), and video (`mod_av`, `mod_cv`, `mod_png`). The result is a SIP + media
+core (sofia, spandsp, opus, conference, event_socket, sndfile, …).
+
+This is **best-effort**: a specific old tag may still need another module disabled.
+Add it to the `sed` filter in `build-from-source.sh` if a build breaks.
 
 ## Tags produced
 
