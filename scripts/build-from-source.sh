@@ -12,7 +12,12 @@ if grep -qiE 'jessie|stretch|buster' /etc/apt/sources.list 2>/dev/null; then
   sed -i -E 's#https?://[^ ]*debian.org/debian-security#http://archive.debian.org/debian-security#g' /etc/apt/sources.list
   sed -i -E 's#https?://[^ ]*debian.org/debian#http://archive.debian.org/debian#g' /etc/apt/sources.list
   sed -i -E '/-updates/d' /etc/apt/sources.list
-  echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid
+  # archive.debian.org repo keys are expired; allow stale and unauthenticated.
+  cat > /etc/apt/apt.conf.d/99archive <<'EOF'
+Acquire::Check-Valid-Until "false";
+Acquire::AllowInsecureRepositories "true";
+APT::Get::AllowUnauthenticated "true";
+EOF
 fi
 
 apt-get update
