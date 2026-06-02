@@ -1,0 +1,38 @@
+[
+  {
+    "major": "1.6",
+    "base_image": "debian:stretch",
+    "codename": "stretch",
+    "repo_path": "debian-release",
+    "package": "freeswitch-meta-all",
+    "aliases": [],
+    "note": "EOL. Not present in the SignalWire token repo and Debian 9 archive is offline; the planner will skip it until a source build is added."
+  },
+  {
+    "major": "1.8",
+    "base_image": "debian:buster",
+    "codename": "buster",
+    "repo_path": "debian-release",
+    "package": "freeswitch-meta-all",
+    "aliases": [],
+    "note": "EOL. Not present in the token repo; skipped until a source build is added."
+  },
+  {
+    "major": "1.10",
+    "base_image": "debian:bookworm",
+    "codename": "bookworm",
+    "repo_path": "debian-release",
+    "package": "freeswitch-meta-all",
+    "aliases": ["latest"],
+    "note": "Current stable. Installable from the token apt repo on Debian 12. This is the only line that builds reliably today."
+  },
+  {
+    "major": "1.11",
+    "base_image": "debian:trixie",
+    "codename": "trixie",
+    "repo_path": "debian-unstable",
+    "package": "freeswitch-meta-all",
+    "aliases": [],
+    "note": "Dev/master. Debian 13 support landed in 1.11 but the trixie token repo is currently broken; planner skips when no package is found."
+  }
+]
