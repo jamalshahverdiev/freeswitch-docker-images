@@ -2,11 +2,11 @@
   {
     "major": "1.6",
     "method": "source",
-    "base_image": "debian:stretch",
-    "codename": "stretch",
+    "base_image": "debian:jessie",
+    "codename": "jessie",
     "ref_prefix": "v1.6.",
     "aliases": [],
-    "note": "EOL. Built from source on Debian 9 (archive.debian.org); latest v1.6.* git tag."
+    "note": "EOL. Built from source on Debian 8 (OpenSSL 1.0.2 — required: 1.6's bundled libsrtp does not compile against OpenSSL 1.1). archive.debian.org; latest v1.6.* git tag."
   },
   {
     "major": "1.8",
